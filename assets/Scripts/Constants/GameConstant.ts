@@ -18,7 +18,7 @@ export var candyInitPosition: Vec3 = new Vec3(0, 800, 0);
 
 export { Instance as BlockManagerInstance } from '../Managers/BlockManager';
 
-export const enum CandiesEnum
+export enum CandiesEnum
 {
     BLUECANDY = 0,
     GREENCANDY = 1,
