@@ -1,138 +1,210 @@
-import { _decorator, Component, Node, Prefab } from 'cc';
-import { Candy } from '../Candies/Candy';
-import { Column } from '../Candies/Column';
-import { CandiesEnum } from '../Constants/GameConstant';
+import { _decorator, Component, Node, Prefab, tween, Vec3 } from "cc";
+import { Candy } from "../Candies/Candy";
+import { Column } from "../Candies/Column";
+import { CandiesEnum, candySize, getTransposeMatrix, topMostCandyPos } from "../Constants/GameConstant";
 const { ccclass, property } = _decorator;
 
 export var Instance = null;
 
-@ccclass('BlockManager')
-export class BlockManager extends Component {
-
-    @property(Prefab)
-    public candyPrefabs: Prefab[] = [];
-
-    @property(Node)
-    public candyBlockNodes: Node[] = [];
-
-    public candyColumns: Column[] = [];
-
-    private matchedColumnsList: number[][] = [];
-
-    onLoad()
-    {
-        Instance = this;
-    }
-
-    onEnable()
-    {
-        this.candyBlockNodes.forEach(block =>{
-            this.candyColumns.push(block.getComponent(Column));
-        })
-
-        this.scheduleOnce(()=>{
-            this.matchCandies();
-            this.destroyCandies();
-        }, 2);
-    }
-
-    matchCandies()
-    {
-        this.matchedColumnsList = Array.from({ length: 10 }, () => Array(10).fill(-1));
-
-        this.matchColumns();
-        this.matchRows();
-        console.log("matchedColumns: ", this.matchedColumnsList);
-    }
-
-    matchColumns()
-    {
-        this.candyColumns.forEach((column, index) => {
-
-            var currentCandy = CandiesEnum.BLUECANDY;
-            var matchedColumn: number[] = Array(10).fill(-1);
-            currentCandy = column.node.children[0].getComponent(Candy).candyType;
-            var count = 1;
-            matchedColumn[0] = 1;
-
-            for(var i = 1; i < column.node.children.length; i++)
-            {
-                var newCandy = column.node.children[i].getComponent(Candy).candyType;
-                if(currentCandy == newCandy)
-                {
-                    matchedColumn[i] = 1;
-                    count += 1;
-                }
-                else 
-                {
-                    currentCandy = newCandy;
-                    for(var j = 0; j < 10; j++)
-                    {
-                        if(matchedColumn[j] == 1)
-                        {
-                            matchedColumn[j] = count >= 3 ? 2 : -1;
-                        }
-                    }
-
-                    if(matchedColumn[i] == -1) matchedColumn[i] = 1;
-                    count = 1;
-                }
-            }
-
-            this.matchedColumnsList[index] = matchedColumn;
-        })
-    }
-
-    matchRows()
-    {
-        for(var row = 0; row < 10; row++)
-        {
-            var currentCandy = this.candyColumns[0].node.children[row].getComponent(Candy).candyType;
-            var matchedColumn: number[] = Array(10).fill(-1);
-            var count = 1;
-            matchedColumn[0] = 1;
-
-            for(var i = 1; i < 10; i++)
-            {
-                var newCandy = this.candyColumns[i].node.children[row].getComponent(Candy).candyType;
-                if(currentCandy == newCandy)
-                {
-                    matchedColumn[i] = 1;
-                    count += 1;
-                }
-                else 
-                {
-                    currentCandy = newCandy;
-                    for(var j = 0; j < 10; j++)
-                    {
-                        if(matchedColumn[j] == 1)
-                        {
-                            matchedColumn[j] = count >= 3 ? 2 : -1;
-                        }
-                    }
-
-                    if(matchedColumn[i] == -1) matchedColumn[i] = 1;
-                    count = 1;
-                }
-            }
-
-            for(var j = 0; j < 10; j++)
-            {
-                if(this.matchedColumnsList[j][row] < 0 && matchedColumn[j] > 1)
-                {
-                    this.matchedColumnsList[j][row] = 2;
-                }
-            }
-        }
-    }
-
-    destroyCandies()
-    {
-        for(var i = 0; i < this.matchedColumnsList.length; i++)
-        {
-            this.candyColumns[i].destroyCandies(this.matchedColumnsList[i]);
-        }
-    }
+interface SwipeInfo{
+    firstSwipeCandyIndex: number;
+    firstSwipeColumnIndex: number;
+    firstSwipeNode: Node;
+    secondSwipeCandyIndex: number;
+    secondSwipeColumnIndex: number;
+    secondSwipeNode: Node;
+    swipeDirection: string;
 }
 
+@ccclass("BlockManager")
+export class BlockManager extends Component {
+  @property(Prefab)
+  public candyPrefabs: Prefab[] = [];
 
+  @property(Node)
+  public candyBlockNodes: Node[] = [];
+
+  public candyColumns: Column[] = [];
+
+  private matchedColumnsList: number[][] = [];
+
+  private currentSwipeInfo: SwipeInfo;
+
+  onLoad() {
+    Instance = this;
+  }
+
+  onEnable() {
+    this.candyBlockNodes.forEach((block) => {
+      this.candyColumns.push(block.getComponent(Column));
+    });
+
+    this.scheduleOnce(() => {
+      this.matchCandies();
+    }, 2);
+  }
+
+  matchCandies() {
+    this.matchedColumnsList = Array.from({ length: 10 }, () =>
+      Array(10).fill(-1)
+    );
+
+    this.matchBoth();
+  }
+
+  matchBoth() {
+
+    var conversionArray: number[][] = Array.from({ length: 10 }, () =>
+    Array(10).fill(-1));
+
+    for(var i = 0; i < this.candyColumns.length; i++)
+    {
+        for(var j = 0; j < this.candyColumns[i].node.children.length; j++)
+        {
+            conversionArray[i][j] = this.candyColumns[i].node.children[j].getComponent(Candy).candyType;
+        }
+    }
+
+    var grid: number[][] = getTransposeMatrix(conversionArray);
+
+    const rows = grid.length;
+    const cols = grid[0].length;
+
+    // Initialize the match grid to -1
+    const matchGrid: number[][] = Array.from({ length: rows }, () =>
+      Array(cols).fill(-1)
+    );
+
+    // Check for horizontal matches
+    for (let row = 0; row < rows; row++) {
+      let matchStart = 0;
+      for (let col = 0; col < cols; col++) {
+        if (col === cols - 1 || grid[row][col] !== grid[row][col + 1]) {
+          // Check if there was a horizontal match of 3 or more
+          if (col - matchStart + 1 >= 3) {
+            for (let i = matchStart; i <= col; i++) {
+              matchGrid[row][i] = 1;
+            }
+          }
+          matchStart = col + 1;
+        }
+      }
+    }
+
+    // Check for vertical matches
+    for (let col = 0; col < cols; col++) {
+      let matchStart = 0;
+      for (let row = 0; row < rows; row++) {
+        if (row === rows - 1 || grid[row][col] !== grid[row + 1][col]) {
+          // Check if there was a vertical match of 3 or more
+          if (row - matchStart + 1 >= 3) {
+            for (let i = matchStart; i <= row; i++) {
+              matchGrid[i][col] = 1;
+            }
+          }
+          matchStart = row + 1;
+        }
+      }
+    }
+
+    var transposedMatchGrid: number[][] = getTransposeMatrix(matchGrid);
+
+    var isCandyDestroyed: boolean = false;
+    for (var i = 0; i < transposedMatchGrid.length; i++) {
+      this.candyColumns[i].destroyCandies(transposedMatchGrid[i]);
+
+      if (!isCandyDestroyed) {
+        for (var j = 0; j < transposedMatchGrid[i].length; j++) {
+          if (transposedMatchGrid[i][j] == 1) {
+            isCandyDestroyed = true;
+            break;
+          }
+        }
+      }
+    }
+
+    if (isCandyDestroyed) {
+      this.currentSwipeInfo = null;
+      this.scheduleOnce(() => {
+        this.matchBoth();
+      }, 2);
+    }
+    else 
+    {
+        if(this.currentSwipeInfo != null)
+        {
+            this.onSwiped(this.currentSwipeInfo.firstSwipeColumnIndex, this.currentSwipeInfo.firstSwipeCandyIndex, this.currentSwipeInfo.swipeDirection, false)
+        }
+    }
+  }
+
+  onSwiped(columnIndex: number, candyIndex: number, swipeDirection: string, checkForCandyMatch: boolean = true)
+  {
+    var firstSwipeNode: Node = this.candyColumns[columnIndex].node.children[candyIndex];
+    var secondSwipeColumnIndex: number;
+    var secondSwipeCandyIndex: number;
+
+    switch(swipeDirection)
+    {
+        case 'up': 
+            secondSwipeColumnIndex = columnIndex; 
+            secondSwipeCandyIndex = candyIndex - 1;
+            break;
+        case 'down': 
+            secondSwipeColumnIndex = columnIndex; 
+            secondSwipeCandyIndex = candyIndex + 1;
+            break;
+        case 'left': 
+            secondSwipeColumnIndex = columnIndex - 1; 
+            secondSwipeCandyIndex = candyIndex; 
+            break;
+        case 'right': 
+            secondSwipeColumnIndex = columnIndex + 1; 
+            secondSwipeCandyIndex = candyIndex;
+            break;
+        default:
+            return;
+    }
+
+    if(secondSwipeCandyIndex < 0 || secondSwipeCandyIndex >= 10 || secondSwipeColumnIndex < 0 || secondSwipeColumnIndex >= 10) return;
+
+    console.log("secondSwipe column: " + secondSwipeColumnIndex + ", candy: " + secondSwipeCandyIndex);
+
+    var secondSwipeNode = this.candyColumns[secondSwipeColumnIndex].node.children[secondSwipeCandyIndex];
+
+    this.currentSwipeInfo = {
+        firstSwipeCandyIndex: candyIndex,
+        firstSwipeColumnIndex: columnIndex,
+        firstSwipeNode: firstSwipeNode,
+        secondSwipeCandyIndex: secondSwipeCandyIndex,
+        secondSwipeColumnIndex: secondSwipeColumnIndex,
+        secondSwipeNode: secondSwipeNode,
+        swipeDirection: swipeDirection,
+    }
+
+    var firstSwipeNodeWorldPosition: Vec3 = firstSwipeNode.worldPosition.clone();
+    var secondSwipeNodeWorldPosition: Vec3 = secondSwipeNode.worldPosition.clone();
+
+    this.moveNodeToTargetWorldPosition(firstSwipeNode, 0.2, secondSwipeNodeWorldPosition);
+    this.moveNodeToTargetWorldPosition(secondSwipeNode, 0.2, firstSwipeNodeWorldPosition);
+
+    this.scheduleOnce(()=>{
+        firstSwipeNode.setParent(this.candyColumns[secondSwipeColumnIndex].node);
+        firstSwipeNode.setSiblingIndex(secondSwipeCandyIndex);
+        firstSwipeNode.setPosition(0, topMostCandyPos - (candySize * secondSwipeCandyIndex));
+
+        secondSwipeNode.setParent(this.candyColumns[columnIndex].node);
+        secondSwipeNode.setSiblingIndex(candyIndex);
+        firstSwipeNode.setPosition(0, topMostCandyPos - (candySize * candyIndex));
+
+        if(checkForCandyMatch) this.matchBoth();
+    }, 0.2)
+  }
+
+  moveNodeToTargetWorldPosition(targetNode: Node, duration: number, targetWorldPosition: Vec3)
+  {
+    tween(targetNode)
+        .to(duration, { worldPosition: targetWorldPosition })
+        .start();
+  }
+}

@@ -28,3 +28,18 @@ export enum CandiesEnum
     YELLOWCANDY = 5,
 }
 
+export function getTransposeMatrix(matrix: number[][]): number[][] {
+    const rows = matrix.length;
+    const cols = matrix[0].length;
+    const transposed: number[][] = [];
+
+    for (let i = 0; i < cols; i++) {
+        transposed[i] = [];
+        for (let j = 0; j < rows; j++) {
+            transposed[i][j] = matrix[j][i];
+        }
+    }
+
+    return transposed;
+}
+

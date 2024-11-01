@@ -33,12 +33,7 @@ export class Column extends Component {
 
   generateCandies(size: number) {
     for (var i = 0; i < size; i++) {
-      var candyIndex: number = getRandomNumber(0, 5);
-      var candyPrefab: Prefab = BlockManagerInstance.candyPrefabs[candyIndex];
-
-      var candyNode: Node = instantiate(candyPrefab);
-      candyNode.setParent(this.node);
-      candyNode.setPosition(candyInitPosition);
+      var candyNode: Node = this.getNewCandy();
       candyNode.setSiblingIndex(i);
     }
 
@@ -80,11 +75,13 @@ export class Column extends Component {
   {
     var shakeDuration: number = 0.25;
     var shakeAmount: number = 10;
-    
+    var totalCandiesDestroyed: number = 0;
+
     for(var i = 0; i < toDestroyIndexes.length; i++)
     {
-      if(toDestroyIndexes[i] == 2)
+      if(toDestroyIndexes[i] == 1)
       {
+        totalCandiesDestroyed += 1;
         var targetNode = this.node.children[i];
         tween(targetNode)
             .to(0.1, { position: new Vec3(targetNode.position.x - shakeAmount, targetNode.position.y, targetNode.position.z) })
@@ -94,9 +91,46 @@ export class Column extends Component {
             .to(0.1, { position: new Vec3(targetNode.position.x - shakeAmount, targetNode.position.y, targetNode.position.z) })
             .to(0.1, { position: new Vec3(targetNode.position.x + shakeAmount, targetNode.position.y, targetNode.position.z) })
             .to(0.1, { position: targetNode.position })
+            .call(()=>{
+              targetNode.setParent(null);
+            })
             .destroySelf()
             .start();
       }
     }
+
+    if(totalCandiesDestroyed > 0)
+    {
+      this.scheduleOnce(()=>{
+        this.changeSiblingIndexesAfterDestroyed();
+        this.generateRemainingCandies(totalCandiesDestroyed);
+        this.fallCandiesDown();
+      }, 1)
+    }
+  }
+
+  changeSiblingIndexesAfterDestroyed()
+  {
+
+  }
+
+  generateRemainingCandies(remainingCandiesCount: number)
+  {
+    for(var i = 0; i < remainingCandiesCount; i++)
+    {
+      var candyNode: Node = this.getNewCandy();
+      candyNode.setSiblingIndex(i);
+    }
+  }
+
+  getNewCandy(): Node
+  {
+    var candyIndex: number = getRandomNumber(0, 5);
+    var candyPrefab: Prefab = BlockManagerInstance.candyPrefabs[candyIndex];
+
+    var candyNode: Node = instantiate(candyPrefab);
+    candyNode.setParent(this.node);
+    candyNode.setPosition(candyInitPosition);
+    return candyNode;
   }
 }
