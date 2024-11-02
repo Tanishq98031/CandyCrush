@@ -58,13 +58,13 @@ export class Column extends Component {
       var bounceTargetPosition: Vec3 = new Vec3(0, bounceHeight, 0);
 
 
-      var moveDuration: number = 0.4;
+      var moveDuration: number = 0.2;
 
-      var delay = countDelay * 0.1;
+      var delay = countDelay * 0;
 
       tween(targetNode)
         .delay(delay)
-        .to(moveDuration, { position: targetPosition }, { easing: "backOut" })
+        .to(moveDuration, { position: targetPosition }, { easing: "cubicIn" })
         .start();
 
       countDelay += 1;
